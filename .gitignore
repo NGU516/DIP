@@ -1,0 +1,10 @@
+# Ignore all PDF files (강의 자료 등) so that they are not tracked by git.
+*.pdf 
+
+# Python virtual environment
+bin/
+lib/
+include/
+share/
+pyvenv.cfg
+lib64 
