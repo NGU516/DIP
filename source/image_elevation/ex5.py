@@ -5,7 +5,7 @@ from PIL import Image, ImageEnhance
 import matplotlib.pylab as pylab
 import os
 
-image_path = r"..\..\image\cheetah.png"
+image_path = r"image\cheetah.png"
 
 def plot_image(image, title=''):
     pylab.title(title, size=14)

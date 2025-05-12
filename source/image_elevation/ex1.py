@@ -6,7 +6,7 @@ import matplotlib.pylab as pylab
 import os # 파일 경로 관련 모듈 import
 
 # 이미지 파일 경로 설정
-image_path = r"..\..\image\parrot.png"
+image_path = "image/parrot.png"
 
 # 영상 표시 함수
 def plot_image(image, title=''):

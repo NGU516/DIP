@@ -6,7 +6,7 @@ from PIL import Image
 import matplotlib.pylab as pylab
 import os
 
-image_path = r"..\..\image\parrot.png"
+image_path = r"image\parrot.png"
 
 def plot_image(image, title=''):
     pylab.title(title, size=14)

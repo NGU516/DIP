@@ -7,7 +7,7 @@ import matplotlib.pylab as pylab
 import os # 파일 경로 관련 모듈 import
 
 # 이미지 파일 경로 설정
-image_path_earth = r"..\..\image\earthfromsky.jpg" # 파워-로우 변환할 이미지 경로
+image_path_earth = r"image\earthfromsky.jpg" # 파워-로우 변환할 이미지 경로
 
 # 영상 표시 함수
 def plot_image(image, title=''):

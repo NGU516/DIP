@@ -3,7 +3,7 @@ from PIL import Image
 import matplotlib.pylab as pylab
 import os
 
-image_path = r"..\..\image\swans.jpg"
+image_path = r"image\swans.jpg"
 
 def plot_image(image, title=''):
     pylab.title(title, size=14)
