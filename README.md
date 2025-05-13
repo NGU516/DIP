@@ -10,4 +10,4 @@ conda activate CV # 프로젝트에서 사용중인 가상환경 활성화
 
 pip install -r requirements.txt # 가상환경 패키지 설치
 or
-pip install scikit-image pillow matplotlib scipy
+conda install scikit-image pillow matplotlib scipy

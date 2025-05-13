@@ -48,10 +48,6 @@ try:
     pylab.tight_layout()
     pylab.show()
 
-    # 4. 결과 이미지 저장
-    im_result.save(r"image\swans_dithered.jpg")
-    print("디더링 결과가 image/swans_dithered.jpg에 저장되었습니다.")
-
 except FileNotFoundError as e:
     print(f"오류: 파일을 찾을 수 없습니다: {e.filename}")
 except Exception as e:
