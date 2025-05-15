@@ -1,4 +1,4 @@
-# Ignore all PDF files (강의 자료 등) so that they are not tracked by git.
+# Ignore all PDF files
 *.pdf 
 
 # Python virtual environment
