@@ -2,173 +2,194 @@ import numpy as np
 from PIL import Image
 import matplotlib.pyplot as plt
 from scipy.fft import fft2, fftshift
-from scipy.ndimage import uniform_filter, gaussian_filter
+from scipy.ndimage import uniform_filter, gaussian_filter, median_filter, generic_filter
 import os
 
 def load_image(image_path):
-    """이미지를 로드하고 그레이스케일로 변환"""
-    try:
-        im = Image.open(image_path).convert('L')
-        return np.array(im, dtype=np.float32)
-    except FileNotFoundError:
-        print(f"오류: 파일을 찾을 수 없습니다: {image_path}")
+    if not os.path.exists(image_path):
+        print(f"경고: {image_path} 파일을 찾을 수 없습니다. 코드를 종료합니다.")
         return None
-    except Exception as e:
-        print(f"예상치 못한 오류가 발생했습니다: {e}")
-        return None
+    # image to gray scale
+    im = Image.open(image_path).convert('L')
+    return np.array(im, dtype=np.float32)
 
-def add_salt_and_pepper_noise(image, amount=0.05):
-    noisy = image.copy()
-    num_salt = np.ceil(amount * image.size * 0.5).astype(int)
-    num_pepper = np.ceil(amount * image.size * 0.5).astype(int)
-    # Salt
-    coords = [np.random.randint(0, i, num_salt) for i in image.shape]
-    noisy[tuple(coords)] = 255
-    # Pepper
-    coords = [np.random.randint(0, i, num_pepper) for i in image.shape]
-    noisy[tuple(coords)] = 0
-    return noisy
+# salt(255) and pepper(0), Random Noise
+def add_salt_pepper_noise_to_array(image_array, proportion):
+    noisy_image = np.copy(image_array)
+    total_pixels = noisy_image.size
+    num_noise_pixels = int(total_pixels * proportion)
+    num_salt = int(num_noise_pixels * 0.5)
+    coords_salt = [np.random.randint(0, dim, num_salt) for dim in noisy_image.shape]
+    noisy_image[tuple(coords_salt)] = 255 if noisy_image.dtype == np.uint8 else 1.0
+    num_pepper = num_noise_pixels - num_salt
+    coords_pepper = [np.random.randint(0, dim, num_pepper) for dim in noisy_image.shape]
+    noisy_image[tuple(coords_pepper)] = 0 if noisy_image.dtype == np.uint8 else 0.0
+    return noisy_image
 
+# frequency analysis, 2D Fourier Transform
 def compute_frequency_spectrum(img):
-    """이미지의 주파수 스펙트럼 계산"""
-    # FFT 적용
     f = fft2(img)
-    # 주파수 스펙트럼을 중앙으로 이동
     fshift = fftshift(f)
-    # 로그 스케일로 변환 (0으로 나누는 것을 방지하기 위해 1을 더함)
     magnitude_spectrum = 20 * np.log(np.abs(fshift) + 1)
     return magnitude_spectrum
 
+# frequency analysis, radius energy distribution
 def analyze_frequency_distribution(img):
-    """이미지의 주파수 분포 분석"""
     h, w = img.shape
-    cx, cy = w // 2, h // 2
+    cx, cy = w // 2, h // 2     # mandrill image cx, cy = 112, 112
     y, x = np.ogrid[:h, :w]
-    distance = np.sqrt((x - cx)**2 + (y - cy)**2)
-    
-    # FFT 및 스펙트럼 계산
-    freq = fft2(img)
-    freq_shifted = fftshift(freq)
-    spectrum_magnitude = np.abs(freq_shifted)
-    
-    # 반지름별 에너지 분포 계산
-    r_max = int(distance.max())
-    radius_energy = np.zeros(r_max + 1)
-    
+    distance = np.sqrt((x - cx)**2 + (y - cy)**2)   # distance from center
+    freq = fft2(img)                                # 2D Fourier Transform
+    freq_shifted = fftshift(freq)                  # shift zero frequency component to center
+    spectrum_magnitude = np.abs(freq_shifted)      # magnitude of spectrum
+    r_max = int(distance.max())                     # max radius
+    radius_energy = np.zeros(r_max + 1)            # initialize radius energy array
+    # calculate radius energy
     for r in range(r_max + 1):
-        mask = (distance >= r) & (distance < r + 1)
+        mask = (distance >= r) & (distance < r + 1)   
         radius_energy[r] = spectrum_magnitude[mask].sum()
-    
-    # 정규화된 에너지 분포
-    normalized_energy = (radius_energy / np.sum(radius_energy)) * 100
-    
-    # 누적 에너지 계산
-    cumulative_energy = np.cumsum(radius_energy)
-    normalized_cumulative = cumulative_energy / cumulative_energy[-1] * 100
-    
+    normalized_energy = (radius_energy / np.sum(radius_energy)) * 100   # normalize energy
+    cumulative_energy = np.cumsum(radius_energy)                        # cumulative energy
+    normalized_cumulative = cumulative_energy / cumulative_energy[-1] * 100 # normalize cumulative energy
     return spectrum_magnitude, normalized_energy, normalized_cumulative
 
+# frequency analysis, plot
 def plot_frequency_analysis(img, normalized_energy, normalized_cumulative, spectrum_magnitude):
-    """주파수 분석 결과 시각화"""
-    plt.figure(figsize=(15, 10))
-    
-    # 원본 이미지
+    plt.figure(figsize=(10, 5))
     plt.subplot(2, 2, 1)
     plt.imshow(img, cmap='gray')
     plt.title('Original Image')
     plt.axis('off')
-    
-    # 주파수 스펙트럼
+
     plt.subplot(2, 2, 2)
     plt.imshow(20 * np.log(np.abs(spectrum_magnitude) + 1), cmap='gray')
     plt.title('Frequency Spectrum')
     plt.axis('off')
-    
-    # 반지름별 에너지 분포
+
     plt.subplot(2, 2, 3)
     plt.plot(normalized_energy)
     plt.title('Radius Energy Distribution (%)')
     plt.xlabel('Radius from Center')
     plt.ylabel('Energy (%)')
     plt.grid(True)
-    
-    # 누적 에너지 분포
+
     plt.subplot(2, 2, 4)
     plt.plot(normalized_cumulative)
     plt.title('Cumulative Energy Distribution (%)')
     plt.xlabel('Radius from Center')
     plt.ylabel('Cumulative Energy (%)')
     plt.grid(True)
-    
+
     plt.tight_layout()
     plt.show()
 
-def analyze_image_frequency(image_path):
-    """이미지의 주파수 성분 분석 및 시각화"""
-    # 이미지 로드
-    img = load_image(image_path)
-    if img is None:
-        return
-    
-    # 주파수 분포 분석
-    spectrum_magnitude, normalized_energy, normalized_cumulative = analyze_frequency_distribution(img)
-    
-    # 결과 시각화
-    plot_frequency_analysis(img, normalized_energy, normalized_cumulative, spectrum_magnitude)
-    
-    # 주파수 성분의 통계적 분석
-    print("\n주파수 성분 분석:")
-    print(f"주파수 스펙트럼 평균: {np.mean(spectrum_magnitude):.2f}")
-    print(f"주파수 스펙트럼 표준편차: {np.std(spectrum_magnitude):.2f}")
-    print(f"최대 에너지 반지름: {np.argmax(normalized_energy)}")
-    print(f"90% 에너지 누적 반지름: {np.argmax(normalized_cumulative >= 90)}")
+def plot_pairwise_results(original, filtered, orig_title, filt_title):
+    # 원본과 필터 이미지를 한 페이지에 비교
+    fig, axs = plt.subplots(2, 3, figsize=(12, 8))
+    # 원본
+    orig_spectrum, orig_norm_energy, _ = analyze_frequency_distribution(original)
+    axs[0, 0].imshow(original, cmap='gray', vmin=0, vmax=255)
+    axs[0, 0].set_title(f'{orig_title} Image')
+    axs[0, 0].axis('off')
+    axs[0, 1].imshow(20 * np.log(orig_spectrum + 1), cmap='gray')
+    axs[0, 1].set_title('2D Fourier Spectrum')
+    axs[0, 1].axis('off')
+    axs[0, 2].plot(orig_norm_energy)
+    axs[0, 2].set_title('Radius Energy Distribution (%)')
+    axs[0, 2].set_xlabel('Radius from Center')
+    axs[0, 2].set_ylabel('Energy (%)')
+    axs[0, 2].grid(True)
+    # 필터
+    filt_spectrum, filt_norm_energy, _ = analyze_frequency_distribution(filtered)
+    axs[1, 0].imshow(filtered, cmap='gray', vmin=0, vmax=255)
+    axs[1, 0].set_title(f'{filt_title} Image')
+    axs[1, 0].axis('off')
+    axs[1, 1].imshow(20 * np.log(filt_spectrum + 1), cmap='gray')
+    axs[1, 1].set_title('2D Fourier Spectrum')
+    axs[1, 1].axis('off')
+    axs[1, 2].plot(filt_norm_energy)
+    axs[1, 2].set_title('Radius Energy Distribution (%)')
+    axs[1, 2].set_xlabel('Radius from Center')
+    axs[1, 2].set_ylabel('Energy (%)')
+    axs[1, 2].grid(True)
+    plt.tight_layout()
+    plt.show()
 
 def plot_all_results(images, titles):
-    n = len(images)
-    page_size = 2
-    num_pages = (n + page_size - 1) // page_size
-    for page in range(num_pages):
-        plt.figure(figsize=(12, 8))
-        for i in range(page_size):
-            idx = page * page_size + i
-            if idx >= n:
-                break
-            img, title = images[idx], titles[idx]
-            spectrum, norm_energy, cum_energy = analyze_frequency_distribution(img)
-            # 원본/필터/노이즈 이미지
-            plt.subplot(page_size, 3, i * 3 + 1)
-            plt.imshow(img, cmap='gray', vmin=0, vmax=255)
-            plt.title(f'{title}\nImage')
-            plt.axis('off')
-            # 2D 푸리에 스펙트럼
-            plt.subplot(page_size, 3, i * 3 + 2)
-            plt.imshow(20 * np.log(spectrum + 1), cmap='gray')
-            plt.title('2D Fourier Spectrum')
-            plt.axis('off')
-            # 반지름별 에너지 분포
-            plt.subplot(page_size, 3, i * 3 + 3)
-            plt.plot(norm_energy)
-            plt.title('Radius Energy Distribution (%)')
-            plt.xlabel('Radius from Center')
-            plt.ylabel('Energy (%)')
-            plt.grid(True)
-        plt.tight_layout()
-        plt.show()
+    # images: [Original, S&P, mean, gauss, median, custom, highpass, ...]
+    # titles: ["Original", ...]
+    original = images[0]
+    orig_title = titles[0]
+    # Original vs S&P Noise
+    plot_pairwise_results(original, images[1], orig_title, titles[1])
+    # Original vs filtered
+    for img, title in zip(images[2:], titles[2:]):
+        plot_pairwise_results(original, img, orig_title, title)
+
+# summarize interval energy, 10%, 10~20%, 20~30%, 30~50%, 50~100%
+def summarize_interval_energy(cumulative, radii=[10, 20, 30, 50, 100]):
+    prev = 0
+    summary = {}
+    for r in radii:
+        if r < len(cumulative):
+            summary[f"{prev}~{r}"] = cumulative[r] - cumulative[prev]
+        else:
+            summary[f"{prev}~{r}"] = cumulative[-1] - cumulative[prev]
+        prev = r
+    return summary
+
+# Salt(255) and Pepper(0) exclude, return max
+def custom_max_filter(image, size=3):
+    def filter_func(values):
+        center = values[len(values)//2]
+        filtered = [v for v in values if v != 0 and v != 255]
+        # if center is 0 or 255, return max(exclude 0 and 255)
+        if center == 0 or center == 255:
+            # if all values are 0 or 255, return 0
+            if len(filtered) == 0:
+                return 0  
+            # if not all values are 0 or 255, return max(exclude 0 and 255)
+            # center pixel is changed to max(exclude 0 and 255)
+            return np.max(filtered)
+        else:
+            # if center is not 0 or 255, center pixel is not changed
+            return center
+    return generic_filter(image, filter_func, size=(size, size))
 
 def main():
     image_path = r"image/mandrill.jpg"
     img = load_image(image_path)
     if img is None:
         return
-    # Salt and Pepper Noise
-    img_sp = add_salt_and_pepper_noise(img, amount=0.05)
-    # Mean Filter
-    img_mean = uniform_filter(img_sp, size=3)
-    # Gaussian Filter
-    img_gauss = gaussian_filter(img_sp, sigma=1)
-    images = [img, img_sp, img_mean, img_gauss]
-    titles = ['Original', 'Salt & Pepper Noise', 'Mean Filtered', 'Gaussian Filtered']
+    img_uint8 = img.astype(np.uint8)
+    img_sp = add_salt_pepper_noise_to_array(img_uint8, proportion=0.05)
+    img_mean = uniform_filter(img_sp.astype(float), size=3)
+    img_gauss = gaussian_filter(img_sp.astype(float), sigma=1)
+    img_median = median_filter(img_sp, size=3)
+    img_custom = custom_max_filter(img_sp, size=3)
+    images = [img, img_sp, img_mean, img_gauss, img_median, img_custom]
+    titles = ['Original', 'Salt & Pepper Noise', 'Mean Filtered', 'Gaussian Filtered', 'Median Filtered', 'Custom Max Filter', 'Highpass Max Filter']
     plot_all_results(images, titles)
+
+    # 에너지 분포 요약 및 표 출력
+    radii = [10, 20, 30, 50, 100]
+    summary_dict = {}
+    for im, title in zip(images, titles):
+        _, _, norm_cum = analyze_frequency_distribution(im)
+        summary = summarize_interval_energy(norm_cum, radii)
+        summary_dict[title] = summary
+
+    # 표 헤더 출력
+    header = ["{:>20}".format(" ")] + ["{:>10}".format(f"{r1}" if i == 0 else f"{r0}~{r1}") for i, (r0, r1) in enumerate(zip([0]+radii[:-1], radii))]
+    print("\n===== 구간별 에너지 분포 요약표 (단위: %) =====")
+    print("".join(header))
+    print("-" * (22 + 12 * len(radii)))
+    # 각 행 출력
+    for title, summary in summary_dict.items():
+        row = ["{:>20}".format(title)]
+        for k in summary:
+            row.append("{:10.2f}".format(summary[k]))
+        print("".join(row))
 
 if __name__ == "__main__":
     main()
